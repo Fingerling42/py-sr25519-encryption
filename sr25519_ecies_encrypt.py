@@ -8,7 +8,9 @@ from substrateinterface import KeypairType, Keypair
 
 # Consts for encryption
 ENCRYPTION_KEY_SIZE = 32
+PUBLIC_KEY_SIZE = 32
 MAC_KEY_SIZE = 32
+MAC_VALUE_SIZE = 32
 DERIVATION_KEY_SALT_SIZE = 32
 DERIVATION_KEY_ROUNDS = 2048        # Number of iterations
 DERIVATION_KEY_SIZE = 64            # Desired length of the derived key
@@ -49,7 +51,7 @@ def sr25519_encrypt(message: str | bytes,
     mac_value = generate_mac_data(
         nonce=nonce,
         encrypted_message=encrypted_message,
-        ephemeral_public_key=message_keypair.public_key,
+        message_public_key=message_keypair.public_key,
         mac_key=mac_key
     )
 
@@ -97,18 +99,20 @@ def nacl_encrypt(message: str | bytes, encryption_key: bytes, nonce: bytes) -> b
     # Create a nacl SecretBox using the encryption key
     box = SecretBox(encryption_key)
 
-    # Encrypt the message
-    encrypted_message = box.encrypt(message_to_bytes(message), nonce)
+    try:
+        # Encrypt the message
+        encrypted_message = box.encrypt(message_to_bytes(message), nonce)
+        return encrypted_message.ciphertext
+    except Exception as e:
+        raise ValueError("Invalid secret or pubkey provided") from e
 
-    return encrypted_message.ciphertext
 
-
-def generate_mac_data(nonce: bytes, encrypted_message: bytes, ephemeral_public_key: bytes, mac_key: bytes) -> bytes:
+def generate_mac_data(nonce: bytes, encrypted_message: bytes, message_public_key: bytes, mac_key: bytes) -> bytes:
     if len(mac_key) != 32:
         raise ValueError("MAC key must be 32 bytes long.")
 
-    # Concatenate nonce, ephemeral public key, and encrypted message
-    data_to_mac = bytes_concat(nonce, ephemeral_public_key, encrypted_message)
+    # Concatenate nonce, message public key, and encrypted message
+    data_to_mac = bytes_concat(nonce, message_public_key, encrypted_message)
 
     # Generate HMAC-SHA256
     mac_data = hmac.new(
